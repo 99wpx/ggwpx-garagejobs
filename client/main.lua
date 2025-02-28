@@ -66,7 +66,7 @@ Citizen.CreateThread(function()
                 interactDst = 2.5,
                 id = 'garage_' .. index,
                 name = 'garage_interaction_' .. index,
-                groups = { ['police'] = 2 },
+                groups = { ['police'] = 0, ['ambulance'] = 0 },
                 options = {
                     {
                         label = 'Open Garage',
@@ -122,25 +122,40 @@ end)
 
 RegisterNetEvent('ggwpx:garage')
 AddEventHandler('ggwpx:garage', function(data)
-    local location = Config.Locations[data.index]  
+    local location = Config.Locations[data.index]
     local vehicleModel = data.vehicle
-    local vehicleType = data.type  --  'car' or 'heli'
+    local vehicleType = data.type 
 
     QBCore.Functions.GetPlayerData(function(PlayerData)
         if PlayerData.job.name == location.job then
-            local spawnPoint
-            if vehicleType == 'heli' then
-                spawnPoint = location.HeliSpawn 
-            else
-                spawnPoint = location.VehicleSpawn 
+            local spawnPoint = (vehicleType == 'heli') and location.HeliSpawn or location.VehicleSpawn
+            
+            RequestModel(vehicleModel)
+            while not HasModelLoaded(vehicleModel) do
+                Wait(0)
             end
+            
             QBCore.Functions.SpawnVehicle(vehicleModel, function(veh)
-                SetVehicleNumberPlateText(veh, "JOB"..tostring(math.random(1000, 9999)))
-                exports['cdn-fuel']:SetFuel(veh, 100.0)
-                SetEntityHeading(veh, spawnPoint.w)
-                TaskWarpPedIntoVehicle(PlayerPedId(), veh, -1)
-                TriggerEvent("vehiclekeys:client:SetOwner", GetVehicleNumberPlateText(veh))
-                SetVehicleEngineOn(veh, true, true)
+                if DoesEntityExist(veh) then
+                    local plate = "JOB"..tostring(math.random(1000, 9999))
+                    
+                    SetVehicleNumberPlateText(veh, plate)
+                    exports['cdn-fuel']:SetFuel(veh, 100.0)
+                    SetEntityHeading(veh, spawnPoint.w)
+                    TaskWarpPedIntoVehicle(PlayerPedId(), veh, -1)
+                    
+                    TriggerEvent("vehiclekeys:client:SetOwner", plate)
+                    SetVehicleEngineOn(veh, true, true)
+
+                    local vehicleData = {
+                        citizenid = PlayerData.citizenid,
+                        model = vehicleModel,
+                        plate = plate
+                    }
+                    TriggerServerEvent('ggwpx:saveVehicle', vehicleData)
+                else
+                    QBCore.Functions.Notify('Failed to spawn vehicle.', 'error')
+                end
             end, spawnPoint, true)
         else
             QBCore.Functions.Notify('You are not authorized for this vehicle.', 'error')
